@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#673ab7">
+<title>Photo Sheet Maker - Megestic Memories</title>
+<style>
+:root{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#202124;background:#f5f5f8}
+*{box-sizing:border-box}body{margin:0;padding:18px}.app{max-width:760px;margin:auto}
+header{margin:8px 0 18px}h1{font-size:24px;margin:0 0 5px}p{margin:0;color:#626675;font-size:14px}
+.panel{background:white;border:1px solid #e4e4eb;border-radius:16px;padding:16px;margin:12px 0;box-shadow:0 2px 10px #1111}
+.upload{display:block;border:2px dashed #aaa2c5;border-radius:12px;padding:22px;text-align:center;cursor:pointer;background:#fbfaff}
+.upload strong{display:block;margin:5px 0}.upload input{display:none}.upload.disabled{opacity:.45;cursor:not-allowed}
+.row{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+label,select,button{font:inherit}select,button{border:1px solid #d7d7df;border-radius:10px;padding:10px 13px;background:white}
+button.primary{background:#673ab7;color:white;border-color:#673ab7;font-weight:650}
+button:disabled{opacity:.45;cursor:not-allowed}.muted{color:#707383;font-size:12px}
+.preview-wrap{overflow:auto;padding:8px 0}
+.sheet{width:min(100%,420px);aspect-ratio:210/297;margin:0 auto;background:#fff;box-shadow:0 2px 14px #0002;display:grid;grid-template-columns:repeat(3,26.190476%);grid-template-rows:repeat(4,18.518519%);column-gap:7.857143%;row-gap:6.397306%;place-content:center}
+.slot{position:relative;min-width:0;min-height:0;background:#f0f0f0;overflow:hidden;display:flex;align-items:center;justify-content:center;color:#888;font-size:11px;touch-action:pan-y}
+.slot img{width:100%;height:100%;object-fit:cover;user-select:none;-webkit-user-drag:none;pointer-events:none}
+.slot.dragging{opacity:.45;outline:2px dashed #673ab7}
+.slot.over{outline:3px solid #673ab7;outline-offset:1px}
+.slot .tools{position:absolute;top:3px;right:3px;display:flex;gap:3px;z-index:3}
+.slot button{padding:0;width:25px;height:25px;border:0;border-radius:50%;background:#222c;color:#fff;font-size:15px;line-height:25px}
+.slot button.add{width:38px;height:38px;padding:0;border:1px dashed #8b75b5;border-radius:50%;background:#fff;color:#673ab7;font-size:25px;line-height:35px}
+.slot.empty{background:#faf9fc;cursor:pointer;border:1px dashed #aaa}
+.status{text-align:center;color:#555;font-size:13px;margin-top:8px}
+.actions{display:flex;gap:8px;flex-wrap:wrap}.actions button{flex:1}
+.note{line-height:1.5}
+.adjust-controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px}
+.adjust-controls button{font-size:13px;padding:7px 10px}
+@media print{
+ @page{size:A4 portrait;margin:0}
+ html,body{margin:0!important;padding:0!important;background:#fff!important}
+ body *{visibility:hidden!important}
+ #sheet,#sheet *{visibility:visible!important}
+ #sheet{position:absolute!important;left:0!important;top:0!important;width:210mm!important;height:297mm!important;max-width:none!important;aspect-ratio:auto!important;margin:0!important;padding:0!important;box-shadow:none!important;grid-template-columns:repeat(3,55mm)!important;grid-template-rows:repeat(4,55mm)!important;column-gap:16.5mm!important;row-gap:19mm!important;place-content:center!important}
+ .slot{width:55mm!important;height:55mm!important;background:#fff!important;border:0!important}
+ .slot .tools,.slot button{display:none!important}.slot.empty{background:#fff!important;border:0!important}
+}
+</style>
+</head>
+<body>
+<main class="app">
+<header><h1>Photo Sheet Maker - Megestic Memories</h1><p>A4 print layout · 55 mm × 55 mm · 3 columns × 4 rows</p></header>
+<section class="panel">
+ <label class="upload" id="upload-label" for="files"><span style="font-size:28px">＋</span><strong>Browse & Select Photos</strong><span class="muted" id="upload-help">Choose up to 12 images from your phone or computer</span><input id="files" type="file" accept="image/*" multiple></label>
+ <input id="replace-file" type="file" accept="image/*" style="display:none">
+ <div class="row" style="margin-top:14px"><span><b>Photo fitting</b><br><span class="muted">Auto Fit or show full image</span></span>
+ <select id="fit"><option value="cover">Auto Fit – Fill box</option><option value="contain">Fit – Show full image</option></select></div>
+ <p class="muted note" style="margin-top:10px">Manual adjustment: drag a photo inside its square to reposition the crop. Use + / − to zoom. Drag a photo tile onto another tile to swap their positions on the sheet. These adjustments also appear in the downloaded sheet and print.</p>
+</section>
+<section class="panel">
+ <div class="row"><b>Print Preview</b><span class="muted" id="count">0 / 12 photos</span></div>
+ <div class="preview-wrap"><div class="sheet" id="sheet" aria-label="A4 photo sheet preview"></div></div>
+ <div class="status" id="status" aria-live="polite">Select photos to begin.</div>
+</section>
+<section class="panel">
+ <b>Selected photo adjustment</b>
+ <p class="muted" id="selected-label" style="margin-top:4px">Tap a photo to select it, then drag it to adjust its position.</p>
+ <div class="adjust-controls">
+  <button id="move-left" type="button" aria-label="Move photo left">← Left</button>
+  <button id="move-right" type="button" aria-label="Move photo right">Right →</button>
+  <button id="move-up" type="button" aria-label="Move photo up">↑ Up</button>
+  <button id="move-down" type="button" aria-label="Move photo down">↓ Down</button>
+ </div>
+ <div class="adjust-controls">
+  <button id="zoom-out" type="button">− Zoom</button><button id="zoom-in" type="button">＋ Zoom</button>
+  <button id="center" type="button">Center photo</button><button id="reset-all" type="button">Reset all adjustments</button>
+ </div>
+ <p class="muted note" style="margin-top:9px">Select a photo, then use Left / Right / Up / Down to move its crop precisely. You can also touch and drag the photo. Zoom and directional adjustments apply only to the selected photo.</p>
+</section>
+<section class="panel">
+ <b>Download complete A4 photo sheet</b>
+ <p class="muted" style="margin:5px 0 12px">Save the entire photo layout as one high-resolution image.</p>
+ <div class="row"><label for="sheet-format"><b class="muted">File format</b></label>
+ <select id="sheet-format"><option value="image/jpeg">JPEG</option><option value="image/png">PNG</option><option value="image/webp">WebP</option></select></div>
+ <button id="download-sheet" class="primary" style="width:100%;margin-top:10px">Download A4 Sheet</button>
+ <p class="muted note" style="margin-top:10px">300 DPI · 2480 × 3508 pixels · A4 portrait. PNG is lossless; JPEG and WebP use compression.</p>
+</section>
+<section class="panel">
+ <div class="actions"><button id="clear">Clear All</button><button id="print" class="primary">Print A4 / Save as PDF</button></div>
+ <p class="muted note" style="margin-top:12px">Print A4 · Portrait · 100% / Actual Size · Margins None · Headers and footers Off. Do not choose “Fit to page”.</p>
+</section>
+</main>
+<script>
+(() => {
+ const files=document.getElementById('files'),replaceFile=document.getElementById('replace-file');
+ const uploadLabel=document.getElementById('upload-label'),uploadHelp=document.getElementById('upload-help');
+ const sheet=document.getElementById('sheet'),fit=document.getElementById('fit');
+ const count=document.getElementById('count'),status=document.getElementById('status');
+ const downloadButton=document.getElementById('download-sheet'),sheetFormat=document.getElementById('sheet-format');
+ const selectedLabel=document.getElementById('selected-label');
+ let photos=Array(12).fill(null),replacementIndex=null,selectedIndex=-1,dragStart=null,saveRequestId=0;
+ window.onNativeSaveResult=(id,success,message)=>{if(id!==saveRequestId)return;status.textContent=success?'✓ '+message:'✕ '+message;};
+ function addFiles(chosen,targetSlots){
+   const valid=[...chosen].filter(f=>f.type.startsWith('image/')),batch=valid.slice(0,targetSlots.length);
+   if(!batch.length){status.textContent='No image files selected.';return}
+   batch.forEach((file,j)=>{const reader=new FileReader();reader.onload=()=>{photos[targetSlots[j]]={url:reader.result,file,name:file.name,zoom:1,ox:0,oy:0};selectedIndex=targetSlots[j];render()};reader.onerror=()=>{status.textContent='Could not read '+file.name};reader.readAsDataURL(file)});
+   if(valid.length>targetSlots.length)status.textContent='Only '+targetSlots.length+' available slot(s). Extra images were skipped.';
+ }
+ function clamp(v){return Math.max(-1,Math.min(1,v))}
+ function render(){
+   sheet.innerHTML='';
+   photos.forEach((photo,i)=>{
+     const slot=document.createElement('div');slot.className='slot'+(photo?'':' empty');slot.dataset.index=i;
+     if(photo){
+       const img=document.createElement('img');img.src=photo.url;img.alt='Photo '+(i+1);img.style.objectFit=fit.value;
+       img.style.objectPosition=((photo.ox+1)*50)+'% '+((photo.oy+1)*50)+'%';
+       if(fit.value==='cover')img.style.transform='scale('+photo.zoom+')';
+       slot.append(img);
+       slot.draggable=true;
+       slot.addEventListener('dragstart',e=>{dragStart=i;slot.classList.add('dragging');e.dataTransfer.setData('text/plain',String(i));e.dataTransfer.effectAllowed='move'});
+       slot.addEventListener('dragend',()=>{slot.classList.remove('dragging');sheet.querySelectorAll('.over').forEach(x=>x.classList.remove('over'))});
+       slot.addEventListener('dragover',e=>{if(dragStart!==null){e.preventDefault();slot.classList.add('over')}});
+       slot.addEventListener('dragleave',()=>slot.classList.remove('over'));
+       slot.addEventListener('drop',e=>{e.preventDefault();const from=dragStart,to=i;if(from!==null&&from!==to){[photos[from],photos[to]]=[photos[to],photos[from]];if(selectedIndex===from)selectedIndex=to;else if(selectedIndex===to)selectedIndex=from;status.textContent='Photos rearranged on the sheet.'}dragStart=null;render()});
+       slot.addEventListener('click',()=>{selectedIndex=i;render()});
+       attachPan(slot,i,img);
+       const tools=document.createElement('div');tools.className='tools';
+       const remove=document.createElement('button');remove.type='button';remove.textContent='×';remove.title='Remove photo';remove.onclick=e=>{e.stopPropagation();photos[i]=null;if(selectedIndex===i)selectedIndex=-1;render()};tools.append(remove);slot.append(tools);
+       if(selectedIndex===i)slot.style.outline='2px solid #673ab7';
+     }else{
+       const add=document.createElement('button');add.type='button';add.className='add';add.textContent='+';add.title='Add photo in slot '+(i+1);
+       add.onclick=()=>{replacementIndex=i;replaceFile.click()};slot.append(add);slot.onclick=()=>{replacementIndex=i;replaceFile.click()};
+       slot.addEventListener('dragover',e=>{if(dragStart!==null){e.preventDefault();slot.classList.add('over')}});
+       slot.addEventListener('dragleave',()=>slot.classList.remove('over'));
+       slot.addEventListener('drop',e=>{e.preventDefault();const from=dragStart;if(from!==null){photos[i]=photos[from];photos[from]=null;selectedIndex=i;dragStart=null;status.textContent='Photo moved to the empty slot.';render()}});
+     }
+     sheet.append(slot);
+   });
+   const n=photos.filter(Boolean).length,remaining=12-n;count.textContent=n+' / 12 photos';
+   if(!status.textContent.startsWith('Photos rearranged')&&!status.textContent.startsWith('Photo moved'))status.textContent=n===12?'All 12 slots filled. Adjust, download or print.':n+' photos added · '+remaining+' slots available.';
+   files.disabled=remaining===0;uploadLabel.classList.toggle('disabled',remaining===0);
+   uploadHelp.textContent=remaining===0?'12 of 12 selected · Remove a photo to add another':'You can add '+remaining+' more photo(s), maximum 12';
+   downloadButton.disabled=n===0;
+   selectedLabel.textContent=selectedIndex>=0&&photos[selectedIndex]?'Selected: Photo '+(selectedIndex+1)+' · Drag inside the square or use zoom controls.':'Tap a photo to select it, then drag it to adjust its position.';
+   ['zoom-in','zoom-out','center','move-left','move-right','move-up','move-down'].forEach(id=>document.getElementById(id).disabled=selectedIndex<0||!photos[selectedIndex]);
+ }
+ function attachPan(slot,index,img){
+   let active=false,startX=0,startY=0,origX=0,origY=0,moved=false;
+   slot.addEventListener('pointerdown',e=>{
+     if(e.target.closest('button'))return;
+     selectedIndex=index;active=true;moved=false;startX=e.clientX;startY=e.clientY;origX=photos[index].ox;origY=photos[index].oy;
+     try{slot.setPointerCapture(e.pointerId)}catch(_){}
+   });
+   slot.addEventListener('pointermove',e=>{
+     if(!active)return;
+     const r=slot.getBoundingClientRect(),dx=(e.clientX-startX)/Math.max(1,r.width)*2,dy=(e.clientY-startY)/Math.max(1,r.height)*2;
+     if(Math.abs(dx)+Math.abs(dy)>0.01)moved=true;
+     photos[index].ox=clamp(origX-dx);photos[index].oy=clamp(origY-dy);
+     img.style.objectPosition=((photos[index].ox+1)*50)+'% '+((photos[index].oy+1)*50)+'%';
+   });
+   const end=()=>{if(active){active=false;if(moved){status.textContent='Photo crop position adjusted.';selectedIndex=index;selectedLabel.textContent='Selected: Photo '+(index+1)+' · Position adjusted.'}}};
+   slot.addEventListener('pointerup',end);slot.addEventListener('pointercancel',end);
+ }
+ files.addEventListener('change',()=>{const empty=photos.map((v,i)=>v===null?i:-1).filter(i=>i>=0);addFiles([...files.files],empty);files.value=''});
+ replaceFile.addEventListener('change',()=>{if(replacementIndex!==null&&replaceFile.files.length)addFiles([replaceFile.files[0]],[replacementIndex]);replacementIndex=null;replaceFile.value=''});
+ fit.addEventListener('change',render);
+ const nudge=(dx,dy)=>{if(selectedIndex>=0&&photos[selectedIndex]){photos[selectedIndex].ox=clamp(photos[selectedIndex].ox+dx);photos[selectedIndex].oy=clamp(photos[selectedIndex].oy+dy);render();status.textContent='Photo '+(selectedIndex+1)+' position adjusted.'}};
+ document.getElementById('move-left').onclick=()=>nudge(-0.12,0);
+ document.getElementById('move-right').onclick=()=>nudge(0.12,0);
+ document.getElementById('move-up').onclick=()=>nudge(0,-0.12);
+ document.getElementById('move-down').onclick=()=>nudge(0,0.12);
+ document.getElementById('zoom-in').onclick=()=>{if(selectedIndex>=0){photos[selectedIndex].zoom=Math.min(3,photos[selectedIndex].zoom+0.1);render()}};
+ document.getElementById('zoom-out').onclick=()=>{if(selectedIndex>=0){photos[selectedIndex].zoom=Math.max(1,photos[selectedIndex].zoom-0.1);render()}};
+ document.getElementById('center').onclick=()=>{if(selectedIndex>=0){photos[selectedIndex].ox=0;photos[selectedIndex].oy=0;render()}};
+ document.getElementById('reset-all').onclick=()=>{photos.forEach(p=>{if(p){p.zoom=1;p.ox=0;p.oy=0}});render();status.textContent='All photo adjustments reset.'};
+ document.getElementById('clear').onclick=()=>{photos=Array(12).fill(null);selectedIndex=-1;render()};
+ function loadImage(src){return new Promise((resolve,reject)=>{const im=new Image();im.onload=()=>resolve(im);im.onerror=()=>reject(new Error('Could not load one of the selected photos.'));im.src=src})}
+ function drawFitted(ctx,img,x,y,w,h,mode,p){
+   ctx.save();ctx.beginPath();ctx.rect(x,y,w,h);ctx.clip();
+   if(mode==='contain'){
+     const scale=Math.min(w/img.naturalWidth,h/img.naturalHeight),dw=img.naturalWidth*scale,dh=img.naturalHeight*scale;
+     ctx.drawImage(img,x+(w-dw)/2,y+(h-dh)/2,dw,dh);
+   }else{
+     const scale=Math.max(w/img.naturalWidth,h/img.naturalHeight)*p.zoom,sw=w/scale,sh=h/scale;
+     const maxX=Math.max(0,img.naturalWidth-sw),maxY=Math.max(0,img.naturalHeight-sh);
+     const sx=maxX*(p.ox+1)/2,sy=maxY*(p.oy+1)/2;
+     ctx.drawImage(img,sx,sy,sw,sh,x,y,w,h);
+   }ctx.restore();
+ }
+ async function downloadFullSheet(){
+   if(!photos.some(Boolean))return;downloadButton.disabled=true;status.textContent='Preparing high-resolution A4 image…';
+   try{
+     const DPI=300,ppm=DPI/25.4,W=Math.round(210*ppm),H=Math.round(297*ppm),canvas=document.createElement('canvas');canvas.width=W;canvas.height=H;
+     const ctx=canvas.getContext('2d',{alpha:false});ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+     const photo=55*ppm,gx=16.5*ppm,gy=19*ppm,startX=(W-(3*photo+2*gx))/2,startY=(H-(4*photo+3*gy))/2;
+     for(let i=0;i<12;i++){if(!photos[i])continue;const img=await loadImage(photos[i].url),x=startX+(i%3)*(photo+gx),y=startY+Math.floor(i/3)*(photo+gy);drawFitted(ctx,img,x,y,photo,photo,fit.value,photos[i])}
+     const mime=sheetFormat.value,blob=await new Promise(r=>canvas.toBlob(r,mime,mime==='image/jpeg'||mime==='image/webp'?1:undefined));if(!blob)throw new Error('Format not supported by this browser.');
+     const ext=mime==='image/jpeg'?'jpg':mime==='image/png'?'png':'webp';
+     if(window.AndroidBridge && window.AndroidBridge.saveImage){
+       const dataUrl=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=reject;r.readAsDataURL(blob)});
+       const requestId=++saveRequestId;status.textContent='Saving image to Pictures/Photo Sheet Maker…';
+       window.AndroidBridge.saveImage(dataUrl,'Photo-Sheet-A4-300dpi.'+ext,requestId);
+     } else {const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='Photo-Sheet-A4-300dpi.'+ext;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),3000);status.textContent='Export requested · '+ext.toUpperCase()+' · '+W+' × '+H+' px · 300 DPI.';}
+   }catch(err){status.textContent='Export failed: '+err.message}finally{downloadButton.disabled=photos.every(p=>!p)}
+ }
+ downloadButton.addEventListener('click',downloadFullSheet);
+ document.getElementById('print').onclick=()=>{if(!photos.some(Boolean)){status.textContent='Please select at least one photo before printing.';return}Promise.all([...sheet.querySelectorAll('img')].map(im=>im.decode().catch(()=>{}))).then(()=>{if(window.AndroidBridge&&window.AndroidBridge.printPage)window.AndroidBridge.printPage();else window.print()})};
+ render();
+})();
+</script>
+</body></html>
